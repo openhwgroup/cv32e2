@@ -1,8 +1,8 @@
-Ibex Reference Guide
-====================
+CV32E20 Reference Guide
+=======================
 
-The Ibex Reference Guide provides background information.
-It describes the design in detail, discusses the verification approach and the resulting testbench structures, and generally helps to understand Ibex in depth.
+The CV32E20 Reference Guide provides background information.
+It describes the design in detail, discusses the verification approach and the resulting testbench structures, and generally helps to understand CV32E20 in depth.
 
 .. toctree::
    :maxdepth: 2

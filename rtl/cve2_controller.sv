@@ -499,9 +499,10 @@ module cve2_controller #(
             exc_cause_o = EXC_CAUSE_IRQ_NM;
             nmi_mode_d  = 1'b1; // enter NMI mode
           end else if (irqs_i.irq_fast != 16'b0) begin
+            // if any of the irq_fast is one
             // generate exception cause ID from fast interrupt ID:
             // - first bit distinguishes interrupts from exceptions,
-            // - third bit adds 16 to fast interrupt ID so that the interrup 0 becomes 16 and the interrupt 15 becomes 31 (hence 5bits)
+            // - third bit adds 16 to fast interrupt ID so that the interrupt 0 becomes 16 and the interrupt 15 becomes 31 (hence 5bits)
             // - second bit is always 0 as the FAST interrupts are represented in the first 5bits, the 6th is always 0 cause is used by the NMI (in that case is 1 as represented by the number 32)
             // for example EXC_CAUSE_IRQ_FAST_0 = {1'b1, 6'd16}
             exc_cause_o = exc_cause_e'({3'b101, mfip_id});
