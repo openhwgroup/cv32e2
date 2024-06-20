@@ -223,7 +223,7 @@ module cve2_core import cve2_pkg::*; #(
   logic        nmi_mode;
   irqs_t       irqs;
   logic        csr_mstatus_mie;
-  logic [31:0] csr_mepc, csr_depc;
+  logic [31:0] csr_mepc, csr_mnepc, csr_depc;
 
   // PMP signals
   logic [33:0]  csr_pmp_addr [PMPNumRegions];
@@ -235,6 +235,7 @@ module cve2_core import cve2_pkg::*; #(
   logic        csr_save_if;
   logic        csr_save_id;
   logic        csr_restore_mret_id;
+  logic        csr_restore_mnret_id;
   logic        csr_restore_dret_id;
   logic        csr_save_cause;
   logic        csr_mtvec_init;
@@ -329,6 +330,7 @@ module cve2_core import cve2_pkg::*; #(
 
     // CSRs
     .csr_mepc_i      (csr_mepc),  // exception return address
+    .csr_mnepc_i     (csr_mnepc), // NMI return address
     .csr_depc_i      (csr_depc),  // debug return address
     .csr_mtvec_i     (csr_mtvec),  // trap-vector base address
     .csr_mtvec_init_o(csr_mtvec_init),
@@ -417,6 +419,7 @@ module cve2_core import cve2_pkg::*; #(
     .csr_save_if_o        (csr_save_if),  // control signal to save PC
     .csr_save_id_o        (csr_save_id),  // control signal to save PC
     .csr_restore_mret_id_o(csr_restore_mret_id),  // restore mstatus upon MRET
+    .csr_restore_mnret_id_o(csr_restore_mnret_id),  // restore mstatus upon MNRET
     .csr_restore_dret_id_o(csr_restore_dret_id),  // restore mstatus upon MRET
     .csr_save_cause_o     (csr_save_cause),
     .csr_mtval_o          (csr_mtval),
@@ -710,6 +713,7 @@ module cve2_core import cve2_pkg::*; #(
     .csr_mstatus_mie_o(csr_mstatus_mie),
     .csr_mstatus_tw_o (csr_mstatus_tw),
     .csr_mepc_o       (csr_mepc),
+    .csr_mnepc_o      (csr_mnepc),
 
     // PMP
     .csr_pmp_cfg_o    (csr_pmp_cfg),
@@ -732,6 +736,7 @@ module cve2_core import cve2_pkg::*; #(
     .csr_save_if_i     (csr_save_if),
     .csr_save_id_i     (csr_save_id),
     .csr_restore_mret_i(csr_restore_mret_id),
+    .csr_restore_mnret_i(csr_restore_mnret_id),
     .csr_restore_dret_i(csr_restore_dret_id),
     .csr_save_cause_i  (csr_save_cause),
     .csr_mcause_i      (exc_cause),

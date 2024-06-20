@@ -22,6 +22,7 @@ module cve2_controller #(
   input  logic                  illegal_insn_i,          // decoder has an invalid instr
   input  logic                  ecall_insn_i,            // decoder has ECALL instr
   input  logic                  mret_insn_i,             // decoder has MRET instr
+  input  logic                  mnret_insn_i,            // decoder has MNRET instr
   input  logic                  dret_insn_i,             // decoder has DRET instr
   input  logic                  wfi_insn_i,              // decoder has WFI instr
   input  logic                  ebrk_insn_i,             // decoder has EBREAK instr
@@ -81,6 +82,7 @@ module cve2_controller #(
   output logic                  csr_save_if_o,
   output logic                  csr_save_id_o,
   output logic                  csr_restore_mret_id_o,
+  output logic                  csr_restore_mnret_id_o,
   output logic                  csr_restore_dret_id_o,
   output logic                  csr_save_cause_o,
   output logic [31:0]           csr_mtval_o,
@@ -145,6 +147,7 @@ module cve2_controller #(
 
   logic ecall_insn;
   logic mret_insn;
+  logic mnret_insn;
   logic dret_insn;
   logic wfi_insn;
   logic ebrk_insn;
@@ -175,6 +178,7 @@ module cve2_controller #(
   // Decoder doesn't take instr_valid into account, factor it in here.
   assign ecall_insn      = ecall_insn_i      & instr_valid_i;
   assign mret_insn       = mret_insn_i       & instr_valid_i;
+  assign mnret_insn      = mnret_insn_i       & instr_valid_i;
   assign dret_insn       = dret_insn_i       & instr_valid_i;
   assign wfi_insn        = wfi_insn_i        & instr_valid_i;
   assign ebrk_insn       = ebrk_insn_i       & instr_valid_i;
@@ -188,7 +192,7 @@ module cve2_controller #(
   // Some instructions can only be executed in M-Mode
   assign illegal_umode = (priv_mode_i != PRIV_LVL_M) &
                          // MRET must be in M-Mode. TW means trap WFI to M-Mode.
-                         (mret_insn | (csr_mstatus_tw_i & wfi_insn));
+                         (mret_insn | mnret_insn | (csr_mstatus_tw_i & wfi_insn));
 
   // This is recorded in the illegal_insn_q flop to help timing.  Specifically
   // it is needed to break the path from cve2_cs_registers/illegal_csr_insn_o
@@ -217,7 +221,7 @@ module cve2_controller #(
   assign special_req_flush_only = wfi_insn | csr_pipe_flush;
 
   // These special requests cause a change in PC
-  assign special_req_pc_change = mret_insn | dret_insn | exc_req_d | exc_req_lsu;
+  assign special_req_pc_change = mret_insn | mnret_insn | dret_insn | exc_req_d | exc_req_lsu;
 
   // generic special request signal, applies to all instructions
   assign special_req = special_req_pc_change | special_req_flush_only;
@@ -322,6 +326,7 @@ module cve2_controller #(
     csr_save_if_o         = 1'b0;
     csr_save_id_o         = 1'b0;
     csr_restore_mret_id_o = 1'b0;
+    csr_restore_mnret_id_o = 1'b0;
     csr_restore_dret_id_o = 1'b0;
     csr_save_cause_o      = 1'b0;
     csr_mtval_o           = '0;
@@ -656,10 +661,16 @@ module cve2_controller #(
           endcase
         end else begin
           // special instructions and pipeline flushes
-          if (mret_insn) begin
-            pc_mux_o              = PC_ERET;
+          if (mret_insn | mnret_insn) begin
             pc_set_o              = 1'b1;
-            csr_restore_mret_id_o = 1'b1;
+            if(mret_insn) begin
+              csr_restore_mret_id_o = 1'b1;
+              pc_mux_o              = PC_ERET;
+            end
+            if(mnret_insn) begin
+              csr_restore_mnret_id_o = 1'b1;
+              pc_mux_o              = PC_NRET;
+            end
             if (nmi_mode_q) begin
               nmi_mode_d          = 1'b0; // exit NMI mode
             end

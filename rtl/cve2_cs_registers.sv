@@ -60,6 +60,7 @@ module cve2_cs_registers #(
   output cve2_pkg::irqs_t      irqs_o,                 // interrupt requests qualified with mie
   output logic                 csr_mstatus_mie_o,
   output logic [31:0]          csr_mepc_o,
+  output logic [31:0]          csr_mnepc_o,
 
   // PMP
   output cve2_pkg::pmp_cfg_t     csr_pmp_cfg_o  [PMPNumRegions],
@@ -83,6 +84,7 @@ module cve2_cs_registers #(
   input  logic                 csr_save_if_i,
   input  logic                 csr_save_id_i,
   input  logic                 csr_restore_mret_i,
+  input  logic                 csr_restore_mnret_i,
   input  logic                 csr_restore_dret_i,
   input  logic                 csr_save_cause_i,
   input  cve2_pkg::exc_cause_e csr_mcause_i,
@@ -135,9 +137,9 @@ import cve2_pkg::*;
   } status_t;
 
   typedef struct packed {
-    logic      mpie;
-    priv_lvl_e mpp;
-  } status_stk_t;
+    logic      nmie;
+    priv_lvl_e mnpp;
+  } nm_status_t;
 
   typedef struct packed {
       x_debug_ver_e xdebugver;
@@ -186,11 +188,14 @@ import cve2_pkg::*;
   logic        dscratch0_en, dscratch1_en;
 
   // CSRs for recoverable NMIs
-  // NOTE: these CSRS are nonstandard, see https://github.com/riscv/riscv-isa-manual/issues/261
-  status_stk_t mstack_q, mstack_d;
-  logic        mstack_en;
-  logic [31:0] mstack_epc_q, mstack_epc_d;
-  logic  [6:0] mstack_cause_q, mstack_cause_d;
+  // NOTE: these CSRS are following draft implementation of SMRNMI in priviledged 
+  // see chapter 4.3
+  // (https://github.com/riscv/riscv-isa-manual/releases/download/riscv-isa-release-1239329-2023-05-23/riscv-privileged.pdf)
+  // beware it is a subject of changes and might (will) be different than the final standard implementation
+  nm_status_t mnstatus_q, mnstatus_d;
+  logic        mnstatus_en, mnscratch_en, mnepc_en, mncause_en;
+  logic [31:0] mnepc_q, mnepc_d, mnscratch_q, mnscratch_d;
+  logic  [6:0] mncause_q, mncause_d;
 
   // PMP Signals
   logic [31:0]                 pmp_addr_rdata  [PMP_MAX_REGIONS];
@@ -286,6 +291,13 @@ import cve2_pkg::*;
         csr_rdata_int[CSR_MSTATUS_TW_BIT]                               = mstatus_q.tw;
       end
 
+      // mnstatus: always M-mode, contains IE bit
+      CSR_MNSTATUS: begin
+        csr_rdata_int                                                       = '0;
+        csr_rdata_int[CSR_MNSTATUS_NMIE_BIT]                                = mnstatus_q.nmie;
+        csr_rdata_int[CSR_MNSTATUS_MNPP_BIT_HIGH:CSR_MNSTATUS_MNPP_BIT_LOW] = mnstatus_q.mnpp;
+      end
+
       // mstatush: All zeros for Ibex (fixed little endian and all other bits reserved)
       CSR_MSTATUSH: csr_rdata_int = '0;
 
@@ -318,8 +330,14 @@ import cve2_pkg::*;
       // mepc: exception program counter
       CSR_MEPC: csr_rdata_int = mepc_q;
 
+      // mnepc: exception program counter
+      CSR_MNEPC: csr_rdata_int = mnepc_q;
+
       // mcause: exception cause
       CSR_MCAUSE: csr_rdata_int = {mcause_q[6], 25'b0, mcause_q[5:0]};
+
+      // mcause: exception cause
+      CSR_MNCAUSE: csr_rdata_int = {mncause_q[6], 25'b0, mncause_q[5:0]};
 
       // mtval: trap value
       CSR_MTVAL: csr_rdata_int = mtval_q;
@@ -508,11 +526,14 @@ import cve2_pkg::*;
     dscratch0_en = 1'b0;
     dscratch1_en = 1'b0;
 
-    mstack_en      = 1'b0;
-    mstack_d.mpie  = mstatus_q.mpie;
-    mstack_d.mpp   = mstatus_q.mpp;
-    mstack_epc_d   = mepc_q;
-    mstack_cause_d = mcause_q;
+    mnstatus_en      = 1'b0;
+    mnstatus_d       = mnstatus_q;
+    mnscratch_en     = 1'b0;
+    mnepc_en         = 1'b0;
+    mnstatus_d.mnpp  = mstatus_q.mpp;
+    mnepc_d          = {csr_wdata_int[31:1], 1'b0};
+    mncause_d        = {csr_wdata_int[31], csr_wdata_int[5:0]};
+    mncause_en = 1'b0;
 
     mcountinhibit_we = 1'b0;
     mhpmcounter_we   = '0;
@@ -536,16 +557,37 @@ import cve2_pkg::*;
           end
         end
 
+        // mnstatus: IE bit
+        CSR_MNSTATUS: begin
+          mnstatus_en = 1'b1;
+          mnstatus_d    = '{
+              nmie: csr_wdata_int[CSR_MNSTATUS_NMIE_BIT],
+              mnpp: priv_lvl_e'(csr_wdata_int[CSR_MNSTATUS_MNPP_BIT_HIGH:CSR_MNSTATUS_MNPP_BIT_LOW])
+          };
+          // Convert illegal values to M-mode
+          if ((mnstatus_d.mnpp != PRIV_LVL_M) && (mnstatus_d.mnpp != PRIV_LVL_U)) begin
+            mnstatus_d.mnpp = PRIV_LVL_M;
+          end
+        end
+
         // interrupt enable
         CSR_MIE: mie_en = 1'b1;
 
         CSR_MSCRATCH: mscratch_en = 1'b1;
 
+        CSR_MNSCRATCH: mnscratch_en = 1'b1;
+
         // mepc: exception program counter
         CSR_MEPC: mepc_en = 1'b1;
 
+        // mnepc: rNMI program counter
+        CSR_MNEPC: mnepc_en = 1'b1;
+
         // mcause
         CSR_MCAUSE: mcause_en = 1'b1;
+
+        // mncause
+        CSR_MNCAUSE: mncause_en = 1'b1;
 
         // mtval: trap value
         CSR_MTVAL: mtval_en = 1'b1;
@@ -652,14 +694,16 @@ import cve2_pkg::*;
           mstatus_en     = 1'b1;
           mstatus_d.mie  = 1'b0; // disable interrupts
           // save current status
-          mstatus_d.mpie = mstatus_q.mie;
-          mstatus_d.mpp  = priv_lvl_q;
-          mepc_en        = 1'b1;
-          mepc_d         = exception_pc;
-          mcause_en      = 1'b1;
-          mcause_d       = {csr_mcause_i};
+          mnstatus_en    = 1'b1;
+          //mnstatus_d.mpie = mstatus_q.mie;
+          mnstatus_d.mnpp  = priv_lvl_q;
+          mnepc_en        = 1'b1;
+          mnepc_d         = exception_pc;
+          mncause_en      = 1'b1;
+          mnscratch_en    = 1'b1;
+          mncause_d       = {csr_mcause_i};
           // save previous status for recoverable NMI
-          mstack_en      = 1'b1;
+          mnstatus_en     = 1'b1;
 
         end
       end // csr_save_cause_i
@@ -681,13 +725,13 @@ import cve2_pkg::*;
         // SEC_CM: EXCEPTION.CTRL_FLOW.GLOBAL_ESC
 
         if (nmi_mode_i) begin
-          // when returning from an NMI restore state from mstack CSR
-          mstatus_d.mpie = mstack_q.mpie;
-          mstatus_d.mpp  = mstack_q.mpp;
+          // when returning from an NMI restore state from mstatus CSR
+          mstatus_d.mpie = mstatus_q.mpie;
+          mstatus_d.mpp  = mnstatus_q.mnpp;
           mepc_en        = 1'b1;
-          mepc_d         = mstack_epc_q;
+          mepc_d         = mepc_q;
           mcause_en      = 1'b1;
-          mcause_d       = mstack_cause_q;
+          mcause_d       = mcause_q;
         end else begin
           // otherwise just set mstatus.MPIE/MPP
           // See RISC-V Privileged Specification, version 1.11, Section 3.1.6.1
@@ -695,6 +739,27 @@ import cve2_pkg::*;
           mstatus_d.mpp  = PRIV_LVL_U;
         end
       end // csr_restore_mret_i
+
+      csr_restore_mnret_i: begin // MNRET
+        priv_lvl_d     = mnstatus_q.mnpp;
+        mstatus_en     = 1'b1;
+        mstatus_d.mie  = mstatus_q.mpie; // re-enable interrupts
+
+        if (mnstatus_q.mnpp != PRIV_LVL_M) begin
+          mstatus_d.mprv = 1'b0;
+        end
+
+        // SEC_CM: EXCEPTION.CTRL_FLOW.LOCAL_ESC
+        // SEC_CM: EXCEPTION.CTRL_FLOW.GLOBAL_ESC
+
+        // when returning from an NMI restore state from mnstatus CSR
+        mstatus_d.mpie = mstatus_q.mpie;
+        mstatus_d.mpp  = mnstatus_q.mnpp;
+        mepc_en        = 1'b1;
+        mepc_d         = mnepc_q;
+        mcause_en      = 1'b1;
+        mcause_d       = mncause_q;
+      end // csr_restore_mnret_i
 
       default:;
     endcase
@@ -734,6 +799,7 @@ import cve2_pkg::*;
 
   // directly output some registers
   assign csr_mepc_o  = mepc_q;
+  assign csr_mnepc_o = mnepc_q;
   assign csr_depc_o  = depc_q;
   assign csr_mtvec_o = mtvec_q;
 
@@ -813,6 +879,20 @@ import cve2_pkg::*;
     .wr_data_i (csr_wdata_int),
     .wr_en_i   (mscratch_en),
     .rd_data_o (mscratch_q),
+    .rd_error_o()
+  );
+
+  // MNSCRATCH
+  cve2_csr #(
+    .Width     (32),
+    .ShadowCopy(1'b0),
+    .ResetValue('0)
+  ) u_mnscratch_csr (
+    .clk_i     (clk_i),
+    .rst_ni    (rst_ni),
+    .wr_data_i (csr_wdata_int),
+    .wr_en_i   (mnscratch_en),
+    .rd_data_o (mnscratch_q),
     .rd_error_o()
   );
 
@@ -919,46 +999,48 @@ import cve2_pkg::*;
     .rd_error_o()
   );
 
-  // MSTACK
-  localparam status_stk_t MSTACK_RESET_VAL = '{mpie: 1'b1, mpp: PRIV_LVL_U};
+  // MNSTATUS
+  localparam nm_status_t MNSTATUS_RESET_VAL = '{nmie:  1'b0,
+                                                mnpp:  PRIV_LVL_M};
+
   cve2_csr #(
-    .Width     ($bits(status_stk_t)),
+    .Width     ($bits(nm_status_t)),
     .ShadowCopy(1'b0),
-    .ResetValue({MSTACK_RESET_VAL})
-  ) u_mstack_csr (
+    .ResetValue({MNSTATUS_RESET_VAL})
+  ) u_mnstatus_csr (
     .clk_i     (clk_i),
     .rst_ni    (rst_ni),
-    .wr_data_i ({mstack_d}),
-    .wr_en_i   (mstack_en),
-    .rd_data_o (mstack_q),
+    .wr_data_i (mnstatus_d),
+    .wr_en_i   (mnstatus_en),
+    .rd_data_o (mnstatus_q),
     .rd_error_o()
   );
 
-  // MSTACK_EPC
+  // MNEPC
   cve2_csr #(
     .Width     (32),
     .ShadowCopy(1'b0),
     .ResetValue('0)
-  ) u_mstack_epc_csr (
+  ) u_mnepc_csr (
     .clk_i     (clk_i),
     .rst_ni    (rst_ni),
-    .wr_data_i (mstack_epc_d),
-    .wr_en_i   (mstack_en),
-    .rd_data_o (mstack_epc_q),
+    .wr_data_i (mnepc_d),
+    .wr_en_i   (mnepc_en),
+    .rd_data_o (mnepc_q),
     .rd_error_o()
   );
 
-  // MSTACK_CAUSE
+  // MNCAUSE
   cve2_csr #(
     .Width     (7),
     .ShadowCopy(1'b0),
     .ResetValue('0)
-  ) u_mstack_cause_csr (
+  ) u_mncause_csr (
     .clk_i     (clk_i),
     .rst_ni    (rst_ni),
-    .wr_data_i (mstack_cause_d),
-    .wr_en_i   (mstack_en),
-    .rd_data_o (mstack_cause_q),
+    .wr_data_i (mncause_d),
+    .wr_en_i   (mncause_en),
+    .rd_data_o (mncause_q),
     .rd_error_o()
   );
 

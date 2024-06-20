@@ -63,6 +63,8 @@ module cve2_if_stage import cve2_pkg::*; #(
   // CSRs
   input  logic [31:0]                 csr_mepc_i,               // PC to restore after handling
                                                                 // the interrupt/exception
+  input  logic [31:0]                 csr_mnepc_i,              // PC to restore after handling
+                                                                // the interrupt/exception
   input  logic [31:0]                 csr_depc_i,               // PC to restore after handling
                                                                 // the debug request
   input  logic [31:0]                 csr_mtvec_i,              // base PC to jump to on exception
@@ -139,6 +141,7 @@ module cve2_if_stage import cve2_pkg::*; #(
       PC_JUMP: fetch_addr_n = branch_target_ex_i;
       PC_EXC:  fetch_addr_n = exc_pc;                       // set PC to exception handler
       PC_ERET: fetch_addr_n = csr_mepc_i;                   // restore PC when returning from EXC
+      PC_NRET: fetch_addr_n = csr_mnepc_i;                   // restore PC when returning from EXC
       PC_DRET: fetch_addr_n = csr_depc_i;
       default: fetch_addr_n = { boot_addr_i[31:8], 8'h00 };
     endcase

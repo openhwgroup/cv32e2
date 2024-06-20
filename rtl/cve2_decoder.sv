@@ -26,6 +26,8 @@ module cve2_decoder #(
   output logic                 ebrk_insn_o,           // trap instr encountered
   output logic                 mret_insn_o,           // return from exception instr
                                                       // encountered
+  output logic                 mnret_insn_o,           // return from NM exception instr
+                                                      // encountered
   output logic                 dret_insn_o,           // return from debug instr encountered
   output logic                 ecall_insn_o,          // syscall instr encountered
   output logic                 wfi_insn_o,            // wait for interrupt instr encountered
@@ -222,6 +224,7 @@ module cve2_decoder #(
     illegal_insn          = 1'b0;
     ebrk_insn_o           = 1'b0;
     mret_insn_o           = 1'b0;
+    mnret_insn_o          = 1'b0;
     dret_insn_o           = 1'b0;
     ecall_insn_o          = 1'b0;
     wfi_insn_o            = 1'b0;
@@ -594,6 +597,9 @@ module cve2_decoder #(
 
             12'h302:  // mret
               mret_insn_o = 1'b1;
+
+            12'h702:  // mnret
+              mnret_insn_o = 1'b1;
 
             12'h7b2:  // dret
               dret_insn_o = 1'b1;

@@ -275,6 +275,7 @@ package cve2_pkg;
     PC_JUMP,
     PC_EXC,
     PC_ERET,
+    PC_NRET,
     PC_DRET,
     PC_BP
   } pc_sel_e;
@@ -409,6 +410,12 @@ package cve2_pkg;
     CSR_PMPADDR14 = 12'h3BE,
     CSR_PMPADDR15 = 12'h3BF,
 
+    // Resumable NMI
+    CSR_MNSCRATCH = 12'h740,
+    CSR_MNEPC     = 12'h741,
+    CSR_MNCAUSE   = 12'h742,
+    CSR_MNSTATUS  = 12'h744,
+
     // ePMP control
     CSR_MSECCFG   = 12'h747,
     CSR_MSECCFGH  = 12'h757,
@@ -537,6 +544,12 @@ package cve2_pkg;
   parameter int unsigned CSR_MSTATUS_MPP_BIT_HIGH = 12;
   parameter int unsigned CSR_MSTATUS_MPRV_BIT     = 17;
   parameter int unsigned CSR_MSTATUS_TW_BIT       = 21;
+
+  // CSR mnstatus bits
+  parameter int unsigned CSR_MNSTATUS_NMIE_BIT    = 3;
+  parameter int unsigned CSR_MNSTATUS_MNPV_BIT     = 7;
+  parameter int unsigned CSR_MNSTATUS_MNPP_BIT_LOW  = 11;
+  parameter int unsigned CSR_MNSTATUS_MNPP_BIT_HIGH = 12;
 
   // CSR machine ISA
   parameter logic [1:0] CSR_MISA_MXL = 2'd1; // M-XLEN: XLEN in M-Mode for RV32

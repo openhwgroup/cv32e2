@@ -67,11 +67,13 @@ In Debug Mode, all interrupts including the NMI are ignored independent of ``mst
 Recoverable Non-Maskable Interrupt
 ----------------------------------
 
-To support recovering from an NMI happening during a trap handling routine, Ibex features additional CSRs for backing up ``mstatus``.MPP, ``mstatus``.MPIE, ``mepc`` and ``mcause``.
-These CSRs are not accessible by software running on the core.
+The base machine-level architecture supports only unresumable non-maskable interrupts (UNMIs), where the NMI jumps to a handler in machine mode, overwriting the current ``mepc`` and ``mcause``
+register values. If the hart had been executing machine-mode code in a trap handler, the previous values in ``mepc`` and ``mcause`` would not be recoverable and so execution is not generally resumable.
 
-These CSRs are nonstandard.
-For more information, see `the corresponding proposal <https://github.com/riscv/riscv-isa-manual/issues/261>`_.
+To support recovering from an NMI (RNMI) happening during a trap handling routine, CVE2 supports the Smrnmi extension. The extension adds four new CSRs (``mnepc``, ``mncause``, ``mnstatus``, and ``mnscratch``) to hold the
+interrupted state, and one new instruction, MNRET, to resume from the RNMI handler.
+
+For more information, see chapter '"Smrnmi" Standard Extension for Resumable Non-Maskable Interrupts"' in draft of 'The RISC-V Instruction Set Manual <https://github.com/riscv/riscv-isa-manual/releases/download/riscv-isa-release-056b6ff-2023-10-02/riscv-privileged.pdf#chapter.4>'_.
 
 
 Exceptions

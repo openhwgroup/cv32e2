@@ -46,7 +46,13 @@ Ibex implements all the Control and Status Registers (CSRs) listed in the follow
 +---------+--------------------+--------+-----------------------------------------------+
 |  0x3BF  | ``pmpaddr15``      | WARL   | PMP Address Register                          |
 +---------+--------------------+--------+-----------------------------------------------+
-|     .             .               .                    .                              |
+|  0x740  | ``mnscratch``      | WARL   | Resumable NMI scratch register                |
++---------+--------------------+--------+-----------------------------------------------+
+|  0x741  | ``mnepc``          | WARL   | Resumable NMI program counter                 |
++---------+--------------------+--------+-----------------------------------------------+
+|  0x742  | ``mncause``        | WARL   | Resumable NMI cause register                  |
++---------+--------------------+--------+-----------------------------------------------+
+|  0x744  | ``mnstatus``       | WARL   | Resumable NMI status register                 |
 +---------+--------------------+--------+-----------------------------------------------+
 |  0x757  | ``mseccfgh``       | WARL   | Upper 32 bits of ``mseccfg``                  |
 +---------+--------------------+--------+-----------------------------------------------+
@@ -309,6 +315,56 @@ Reset Value: ``0x0000_0000``
 +----------------+
 
 .. _csr-tselect:
+
+Resumable NMI Machine Exception PC (mnepc)
+---------------------------
+
+CSR Address: ``0x741``
+
+Reset Value: ``0x0000_0000``
+
+When an NMI exception is encountered, the current program counter is saved in ``mnepc``, and the core jumps to the exception address.
+When an MNRET instruction is executed, the value from ``mnepc`` replaces the current program counter.
+
+
+Resumable NMI Machine Cause (mncause)
+----------------------
+
+CSR Address: ``0x742``
+
+Reset Value: ``0x0000_0000``
+
++-------+------+------------------------------------------------------------------+
+| Bit#  | R/W  | Description                                                      |
++-------+------+------------------------------------------------------------------+
+| 31    | R    | **Interrupt:** This bit is set when the exception was triggered  |
+|       |      | by an interrupt.                                                 |
++-------+------+------------------------------------------------------------------+
+| 30:0  | WARL | **NMI Cause**                                                    |
++-------+------+------------------------------------------------------------------+
+
+The mncause CSR holds the reason for the NMI, with bit MXLEN-1 set to 1, and the NMI cause
+encoded in the least-significant bits or zero if NMI causes are not supported.
+
+Resumable NMI Machine Status (mnstatus)
+------------------------
+
+CSR Address: ``0x744``
+
+Reset Value: ``0x0000_0000``
+
++-------+-----+---------------------------------------------------------------------------------+
+| Bit#  | R/W | Description                                                                     |
++-------+-----+---------------------------------------------------------------------------------+
+| 12:11 | RW  | **MNPP:** Machine Previous Privilege mode.                                      |
++-------+-----+---------------------------------------------------------------------------------+
+| 3     | RW  | **Interrupt Enable (NMIE):** If set to 1'b1, interrupts are globally enabled.   |
++-------+-----+---------------------------------------------------------------------------------+
+
+When an RNMI interrupt is detected, The ``mnstatus``.NMIE bit is cleared, masking all interrupts. If you want to enable interrupt handling in your exception handler, set ``mnstatus``.NMIE back to 1'b1 inside your handler code.
+
+Only Machine Mode and User Mode are supported.
+Any write to ``mnstatus``.MNPP of an unsupported value will be interpreted as Machine Mode.
 
 Trigger Select Register (tselect)
 ---------------------------------

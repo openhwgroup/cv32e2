@@ -187,11 +187,17 @@ identify the versions of RISC-V extensions from these specifications.
    Privileged Architecture Extension, version 0.9-draft, 3/15/2022,
    https://github.com/riscv/riscv-fast-interrupt/blob/master/clic.pdf
 
+.. [SMRNMI] "Smrnmi" Standard Extension for Resumable Non-Maskable Interrupts
+   https://github.com/riscv/riscv-isa-manual/releases/download/riscv-isa-release-056b6ff-2023-10-02/riscv-privileged.pdf#chapter.4
+
 Other documents
 ===============
 
 .. [FPGAreset] Ken Chapman, “Get Smart About Reset: Think Local, Not
    Global”, Xilinx WP272 white paper, https://docs.xilinx.com/v/u/en-US/wp272
+
+.. [Ibex] Production-quality open source 32-bit RISC-V CPU core written in SystemVerilog
+   https://ibex-core.readthedocs.io/en/latest/index.html
 
 CV32E20 core functional requirements
 ====================================
@@ -700,9 +706,8 @@ IRQs, but is not yet ratified at the time of specification.
 +---------+------------------------------------------------------------+
 
 .. note::
-   It should be noted that Ibex had implemented a custom mechanism for NMI 
-   recovery. A standard RISC-V way of NMI recovery is in draft stage. In
-   future, the custom mechanism could be reworked to follow the standard.
+   [Ibex] had implemented a custom mechanism for NMI recovery. In CVE2 this
+   custom mechanism is reworked to follow the drafted standard [SMRNMI]_.
 
 Coprocessor interface
 ---------------------

@@ -85,6 +85,7 @@ module cve2_id_stage #(
   output logic                      csr_save_if_o,
   output logic                      csr_save_id_o,
   output logic                      csr_restore_mret_id_o,
+  output logic                      csr_restore_mnret_id_o,
   output logic                      csr_restore_dret_id_o,
   output logic                      csr_save_cause_o,
   output logic [31:0]               csr_mtval_o,
@@ -159,6 +160,7 @@ module cve2_id_stage #(
   logic        illegal_insn_dec;
   logic        ebrk_insn;
   logic        mret_insn_dec;
+  logic        mnret_insn_dec;
   logic        dret_insn_dec;
   logic        ecall_insn_dec;
   logic        wfi_insn_dec;
@@ -346,6 +348,7 @@ module cve2_id_stage #(
     .illegal_insn_o(illegal_insn_dec),
     .ebrk_insn_o   (ebrk_insn),
     .mret_insn_o   (mret_insn_dec),
+    .mnret_insn_o  (mnret_insn_dec),
     .dret_insn_o   (dret_insn_dec),
     .ecall_insn_o  (ecall_insn_dec),
     .wfi_insn_o    (wfi_insn_dec),
@@ -456,6 +459,7 @@ module cve2_id_stage #(
     .illegal_insn_i  (illegal_insn_o),
     .ecall_insn_i    (ecall_insn_dec),
     .mret_insn_i     (mret_insn_dec),
+    .mnret_insn_i    (mnret_insn_dec),
     .dret_insn_i     (dret_insn_dec),
     .wfi_insn_i      (wfi_insn_dec),
     .ebrk_insn_i     (ebrk_insn),
@@ -501,6 +505,7 @@ module cve2_id_stage #(
     .csr_save_if_o        (csr_save_if_o),
     .csr_save_id_o        (csr_save_id_o),
     .csr_restore_mret_id_o(csr_restore_mret_id_o),
+    .csr_restore_mnret_id_o(csr_restore_mnret_id_o),
     .csr_restore_dret_id_o(csr_restore_dret_id_o),
     .csr_save_cause_o     (csr_save_cause_o),
     .csr_mtval_o          (csr_mtval_o),

@@ -893,6 +893,7 @@ module cve2_tracer (
         INSN_ECALL:      decode_mnemonic("ecall");
         INSN_EBREAK:     decode_mnemonic("ebreak");
         INSN_MRET:       decode_mnemonic("mret");
+        INSN_MNRET:      decode_mnemonic("mnret");
         INSN_DRET:       decode_mnemonic("dret");
         INSN_WFI:        decode_mnemonic("wfi");
         // RV32M
