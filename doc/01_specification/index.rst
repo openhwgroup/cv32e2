@@ -247,8 +247,8 @@ Operating modes (Privilege Levels)
 +--------+--------------------------------------------------------------+
 | PVL-30 | CV32E20 shall export the CPU's operating mode as an address  |
 |        | phase attribute output signals on the Harvard memory         |
-|        | interfaces (instruction fetch, data load/store) with machine |
-|        | mode defined as 1'b1 and user mode as 1'b0.                  |
+|        | interfaces (instruction fetch, data load/store) with mode    |
+|        | encoded as per specification in [RVpriv]_.                   |
 +--------+--------------------------------------------------------------+
 | PVL-40 | CV32E20 shall support the **bare** (addressing) mode, that   |
 |        | is, no support for address translation or protection.        |
