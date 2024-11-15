@@ -15,16 +15,21 @@
 # limitations under the License.
 
 usage() {                                 # Function: Print a help message.
-  echo "Usage: $0 [ -t {cadence,synopsys,mentor} ]" 1>&2
+  echo "Usage: $0 [ -g ] [ -t {cadence,synopsys,mentor} ]" 1>&2
 }
 exit_abnormal() {                         # Function: Exit with error.
   usage
   exit 1
 }
 
-while getopts "t:" flag
+batchmode="-batch"
+
+while getopts "gt:" flag
 do
     case "${flag}" in
+        g)
+        batchmode=""
+        ;;
         t)
         target_tool=${OPTARG}
         ;;
@@ -80,7 +85,7 @@ mkdir -p ${report_dir}
 
 if [[ "${target_tool}" == "cadence" ]]; then
     tcl_script=$(readlink -f $(dirname "${BASH_SOURCE[0]}"))/cadence/sec.tcl
-    jg -sec -proj ${report_dir} -batch -tcl ${tcl_script} -define report_dir ${report_dir} &> ${report_dir}/output.candence.log
+    jg -sec -proj ${report_dir} ${batchmode} -tcl ${tcl_script} -define report_dir ${report_dir} &> ${report_dir}/output.candence.log
 
     if [ ! -f ${report_dir}/summary.cadence.log ]; then
         echo "Something went wrong during the process"
