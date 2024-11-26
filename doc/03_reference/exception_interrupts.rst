@@ -14,7 +14,7 @@ The base address of the vector table is initialized to the boot address (must be
 The base address can be changed after bootup by writing to the ``mtvec`` CSR.
 For more information, see the :ref:`cs-registers` documentation.
 
-The core starts fetching at the address made by concatenating the most significant 3 bytes of the boot address and the reset value (0x80) as the least significant byte.
+The core starts fetching at the address made by the most significant 3 bytes of the boot address.
 It is assumed that the boot address is supplied via a register to avoid long paths to the instruction fetch unit.
 
 Privilege Modes

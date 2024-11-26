@@ -130,7 +130,7 @@ Interfaces
 |                            |                         |     | from :ref:`csr-mhartid` CSR            |
 +----------------------------+-------------------------+-----+----------------------------------------+
 | ``boot_addr_i``            | 32                      | in  | First program counter after reset      |
-|                            |                         |     | = ``boot_addr_i`` + 0x80,              |
+|                            |                         |     | = ``boot_addr_i``,                     |
 |                            |                         |     | see :ref:`exceptions-interrupts`       |
 +----------------------------+-------------------------+-----+----------------------------------------+
 | ``instr_*``                | Instruction fetch interface, see :ref:`instruction-fetch`              |
