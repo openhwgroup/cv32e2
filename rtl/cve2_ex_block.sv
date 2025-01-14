@@ -21,6 +21,18 @@ module cve2_ex_block #(
   input  logic [31:0]           alu_operand_b_i,
   input  logic                  alu_instr_first_cycle_i,
 
+  // X-Interface
+  input  logic        x_result_valid_assigned_i,
+  input  logic [ 4:0] x_result_rd_i,
+  input  logic [31:0] x_result_data_i,
+  input  logic        x_result_we_i,
+  input  logic        x_mem_instr_i,
+  input  logic [ 3:0] x_mem_id_ex_i,
+  output logic [31:0] x_mem_result_rdata_o,
+  output logic        x_mem_instr_wb_o,
+  output logic [ 3:0] x_mem_result_id_o,
+  output logic [31:0] result_fw_to_x_o,
+
   // Multiplier/Divider
   input  cve2_pkg::md_op_e      multdiv_operator_i,
   input  logic                  mult_en_i,             // dynamic enable signal, for FSM control

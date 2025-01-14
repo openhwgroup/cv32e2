@@ -24,7 +24,8 @@ module cve2_core import cve2_pkg::*; #(
   parameter bit          DbgTriggerEn      = 1'b0,
   parameter int unsigned DbgHwBreakNum     = 1,
   parameter int unsigned DmHaltAddr        = 32'h1A110800,
-  parameter int unsigned DmExceptionAddr   = 32'h1A110808
+  parameter int unsigned DmExceptionAddr   = 32'h1A110808,
+  parameter              COREV_X_IF        = 0
 ) (
   // Clock and Reset
   input  logic                         clk_i,
@@ -53,6 +54,38 @@ module cve2_core import cve2_pkg::*; #(
   output logic [31:0]                  data_wdata_o,
   input  logic [31:0]                  data_rdata_i,
   input  logic                         data_err_i,
+
+  // CORE-V-XIF
+  // Compressed interface
+  output logic x_compressed_valid_o,
+  input logic x_compressed_ready_i,
+  output x_compressed_req_t x_compressed_req_o,
+  input x_compressed_resp_t x_compressed_resp_i,
+
+  // Issue Interface
+  output logic x_issue_valid_o,
+  input logic x_issue_ready_i,
+  output x_issue_req_t x_issue_req_o,
+  input x_issue_resp_t x_issue_resp_i,
+
+  // Commit Interface
+  output logic x_commit_valid_o,
+  output x_commit_t x_commit_o,
+
+  // Memory request/response Interface
+  input logic x_mem_valid_i,
+  output logic x_mem_ready_o,
+  input x_mem_req_t x_mem_req_i,
+  output x_mem_resp_t x_mem_resp_o,
+
+  // Memory Result Interface
+  output logic x_mem_result_valid_o,
+  output x_mem_result_t x_mem_result_o,
+
+  // Result Interface
+  input logic x_result_valid_i,
+  output logic x_result_ready_o,
+  input x_result_t x_result_i,
 
   // Interrupt inputs
   input  logic                         irq_software_i,
@@ -149,6 +182,14 @@ module cve2_core import cve2_pkg::*; #(
   logic        ctrl_busy;
   logic        if_busy;
   logic        lsu_busy;
+
+  // X-Interface
+  logic        [                 3:0]       x_compressed_id;
+  logic                                     x_result_valid_assigned;
+  logic                                     x_mem_instr;
+  logic        [                 3:0]       x_mem_id_ex;
+  logic                                     x_mem_instr_wb;
+  logic        [                31:0]       result_fw_to_x;
 
   // Register File
   logic [4:0]  rf_raddr_a;
@@ -269,6 +310,8 @@ module cve2_core import cve2_pkg::*; #(
   logic        perf_load;
   logic        perf_store;
 
+  assign x_mem_result_o.dbg = '0;
+
   // for RVFI
   logic        illegal_insn_id, unused_illegal_insn_id; // ID stage sees an illegal instruction
 
@@ -285,6 +328,7 @@ module cve2_core import cve2_pkg::*; #(
   //////////////
 
   cve2_if_stage #(
+    .COREV_X_IF      (COREV_X_IF),
     .DmHaltAddr       (DmHaltAddr),
     .DmExceptionAddr  (DmExceptionAddr)
   ) if_stage_i (
@@ -336,7 +380,14 @@ module cve2_core import cve2_pkg::*; #(
     // pipeline stalls
     .id_in_ready_i(id_in_ready),
 
-    .if_busy_o          (if_busy)
+    .if_busy_o          (if_busy),
+
+    // X-IF
+    .x_compressed_valid_o(x_compressed_valid_o),
+    .x_compressed_ready_i(x_compressed_ready_i),
+    .x_compressed_req_o  (x_compressed_req_o),
+    .x_compressed_resp_i (x_compressed_resp_i),
+    .x_compressed_id_i   (x_compressed_id)
   );
 
   // Core is waiting for the ISide when ID/EX stage is ready for a new instruction but none are
@@ -353,7 +404,8 @@ module cve2_core import cve2_pkg::*; #(
   cve2_id_stage #(
     .RV32E          (RV32E),
     .RV32M          (RV32M),
-    .RV32B          (RV32B)
+    .RV32B          (RV32B),
+    .COREV_X_IF      (COREV_X_IF)
   ) id_stage_i (
     .clk_i (clk_i),
     .rst_ni(rst_ni),
@@ -478,7 +530,43 @@ module cve2_core import cve2_pkg::*; #(
     .perf_dside_wait_o(perf_dside_wait),
     .perf_wfi_wait_o  (perf_wfi_wait),
     .perf_div_wait_o  (perf_div_wait),
-    .instr_id_done_o  (instr_id_done)
+    .instr_id_done_o  (instr_id_done),
+
+    // CORE-V-XIF
+    // Compressed Interface
+    .x_compressed_id_o(x_compressed_id),
+
+    // Issue Interface
+    .x_issue_valid_o(x_issue_valid_o),
+    .x_issue_ready_i(x_issue_ready_i),
+    .x_issue_req_o  (x_issue_req_o),
+    .x_issue_resp_i (x_issue_resp_i),
+
+    // Commit Interface
+    .x_commit_valid_o(x_commit_valid_o),
+    .x_commit_o(x_commit_o),
+
+    // Memory request/response Interface
+    .x_mem_valid_i(x_mem_valid_i),
+    .x_mem_ready_o(x_mem_ready_o),
+    .x_mem_req_i  (x_mem_req_i),
+    .x_mem_resp_o (x_mem_resp_o),
+
+    // Memory Result Interface
+    .x_mem_result_valid_o(x_mem_result_valid_o),
+    .x_mem_result_err_o  (x_mem_result_o.err),
+
+    // Result Interface
+    .x_result_valid_i(x_result_valid_i),
+    .x_result_ready_o(x_result_ready_o),
+    .x_result_i(x_result_i),
+    .x_result_valid_assigned_o(x_result_valid_assigned),
+
+    .x_mem_instr_ex_o(x_mem_instr),
+    .x_mem_id_ex_o   (x_mem_id_ex),
+    .x_mem_instr_wb_i(x_mem_instr_wb),
+    .result_fw_to_x_i(result_fw_to_x)
+
   );
 
   // for RVFI only
@@ -490,6 +578,18 @@ module cve2_core import cve2_pkg::*; #(
   ) ex_block_i (
     .clk_i (clk_i),
     .rst_ni(rst_ni),
+
+   // X-Interface
+    .x_result_valid_assigned_i(x_result_valid_assigned),
+    .x_result_rd_i            (x_result_i.rd),
+    .x_result_data_i          (x_result_i.data),
+    .x_result_we_i            (x_result_i.we),
+    .x_mem_instr_i            (x_mem_instr),
+    .x_mem_id_ex_i            (x_mem_id_ex),
+    .x_mem_result_rdata_o     (x_mem_result_o.rdata),
+    .x_mem_instr_wb_o         (x_mem_instr_wb),
+    .x_mem_result_id_o        (x_mem_result_o.id),
+    .result_fw_to_x_o         (result_fw_to_x),
 
     // ALU signal from ID stage
     .alu_operator_i         (alu_operator_ex),
@@ -520,6 +620,7 @@ module cve2_core import cve2_pkg::*; #(
     .branch_decision_o(branch_decision),  // to ID
 
     .ex_valid_o(ex_valid)
+
   );
 
   /////////////////////

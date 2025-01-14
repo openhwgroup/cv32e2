@@ -13,6 +13,7 @@
  * Top level module of the ibex RISC-V core
  */
 module cve2_top import cve2_pkg::*; #(
+  parameter COREV_X_IF = 0,
   parameter int unsigned MHPMCounterNum   = 0,
   parameter int unsigned MHPMCounterWidth = 40,
   parameter bit          RV32E            = 1'b0,
@@ -59,6 +60,38 @@ module cve2_top import cve2_pkg::*; #(
   // Debug Interface
   input  logic                         debug_req_i,
   output crash_dump_t                  crash_dump_o,
+
+// CORE-V-XIF
+  // Compressed interface
+  output logic x_compressed_valid_o,
+  input logic x_compressed_ready_i,
+  output x_compressed_req_t x_compressed_req_o,
+  input x_compressed_resp_t x_compressed_resp_i,
+
+  // Issue Interface
+  output logic x_issue_valid_o,
+  input logic x_issue_ready_i,
+  output x_issue_req_t x_issue_req_o,
+  input x_issue_resp_t x_issue_resp_i,
+
+  // Commit Interface
+  output logic x_commit_valid_o,
+  output x_commit_t x_commit_o,
+
+  // Memory request/response Interface
+  input logic x_mem_valid_i,
+  output logic x_mem_ready_o,
+  input x_mem_req_t x_mem_req_i,
+  output x_mem_resp_t x_mem_resp_o,
+
+  // Memory Result Interface
+  output logic x_mem_result_valid_o,
+  output x_mem_result_t x_mem_result_o,
+
+  // Result Interface
+  input logic x_result_valid_i,
+  output logic x_result_ready_o,
+  input x_result_t x_result_i,
 
   // RISC-V Formal Interface
   // Does not comply with the coding standards of _i/_o suffixes, but follows
@@ -150,6 +183,7 @@ module cve2_top import cve2_pkg::*; #(
   ////////////////////////
 
   cve2_core #(
+    .COREV_X_IF      (COREV_X_IF),
     .PMPEnable        (PMPEnable),
     .PMPGranularity   (PMPGranularity),
     .PMPNumRegions    (PMPNumRegions),
@@ -196,6 +230,38 @@ module cve2_top import cve2_pkg::*; #(
 
     .debug_req_i,
     .crash_dump_o,
+
+  // CORE-V-XIF
+  // Compressed interface
+    .x_compressed_valid_o(x_compressed_valid_o),
+    .x_compressed_ready_i(x_compressed_ready_i),
+    .x_compressed_req_o  (x_compressed_req_o),
+    .x_compressed_resp_i (x_compressed_resp_i),
+
+  // Issue Interface
+    .x_issue_valid_o(x_issue_valid_o),
+    .x_issue_ready_i(x_issue_ready_i),
+    .x_issue_req_o  (x_issue_req_o),
+    .x_issue_resp_i (x_issue_resp_i),
+
+      // Commit Interface
+    .x_commit_valid_o(x_commit_valid_o),
+    .x_commit_o(x_commit_o),
+
+      // Memory request/response Interface
+    .x_mem_valid_i(x_mem_valid_i),
+    .x_mem_ready_o(x_mem_ready_o),
+    .x_mem_req_i  (x_mem_req_i),
+    .x_mem_resp_o (x_mem_resp_o),
+
+      // Memory Result Interface
+    .x_mem_result_valid_o(x_mem_result_valid_o),
+    .x_mem_result_o(x_mem_result_o),
+
+      // Result Interface
+    .x_result_valid_i(x_result_valid_i),
+    .x_result_ready_o(x_result_ready_o),
+    .x_result_i(x_result_i),
 
 `ifdef RVFI
     .rvfi_valid,

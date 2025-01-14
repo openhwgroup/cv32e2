@@ -30,6 +30,13 @@ module cve2_if_stage import cve2_pkg::*; #(
   input  logic [31:0]                 instr_rdata_i,
   input  logic                        instr_err_i,
 
+  // compressed x-interface
+  output logic x_compressed_valid_o,
+  input logic x_compressed_ready_i,
+  output cve2_pkg::x_compressed_req_t x_compressed_req_o,
+  input cve2_pkg::x_compressed_resp_t x_compressed_resp_i,
+  input logic [3:0] x_compressed_id_i,
+
   // output of ID stage
   output logic                        instr_valid_id_o,         // instr in IF-ID is valid
   output logic                        instr_new_id_o,           // instr in IF-ID is new
@@ -92,7 +99,9 @@ module cve2_if_stage import cve2_pkg::*; #(
   logic              fetch_err_plus2;
 
   logic [31:0]       instr_decompressed;
+  logic [31:0]       instr_decompressed_dec;
   logic              illegal_c_insn;
+  logic              illegal_c_insn_dec;
   logic              instr_is_compressed;
 
   logic              if_instr_pmp_err;
@@ -205,10 +214,36 @@ module cve2_if_stage import cve2_pkg::*; #(
     .rst_ni         (rst_ni),
     .valid_i        (fetch_valid & ~fetch_err),
     .instr_i        (fetch_rdata),
-    .instr_o        (instr_decompressed),
+    .instr_o        (instr_decompressed_dec),
     .is_compressed_o(instr_is_compressed),
-    .illegal_instr_o(illegal_c_insn)
+    .illegal_instr_o(illegal_c_insn_dec)
   );
+
+  generate
+    if (COREV_X_IF != 0) begin
+      assign x_compressed_valid_o = illegal_c_insn_dec;
+      assign x_compressed_req_o.instr = fetch_rdata[15:0];
+      assign x_compressed_req_o.mode = 2'b00;  // Machine Mode
+      assign x_compressed_req_o.id = x_compressed_id_i;
+
+      always_comb begin
+        instr_decompressed = instr_decompressed_dec;
+        illegal_c_insn     = illegal_c_insn_dec;
+        if (x_compressed_valid_o & x_compressed_ready_i & x_compressed_resp_i.accept) begin
+          instr_decompressed = x_compressed_resp_i.instr;
+          illegal_c_insn = 1'b0;
+        end else if (x_compressed_valid_o & x_compressed_ready_i & ~x_compressed_resp_i.accept) begin
+          instr_decompressed = x_compressed_resp_i.instr;
+          illegal_c_insn = 1'b1;
+        end
+      end
+    end else begin
+      assign instr_decompressed   = instr_decompressed_dec;
+      assign illegal_c_insn       = illegal_c_insn_dec;
+      assign x_compressed_valid_o = '0;
+      assign x_compressed_req_o   = '0;
+    end
+  endgenerate
 
   // The ID stage becomes valid as soon as any instruction is registered in the ID stage flops.
   // Note that the current instruction is squashed by the incoming pc_set_i signal.

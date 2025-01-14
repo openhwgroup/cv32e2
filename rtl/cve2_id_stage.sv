@@ -20,7 +20,8 @@
 module cve2_id_stage #(
   parameter bit               RV32E           = 0,
   parameter cve2_pkg::rv32m_e RV32M           = cve2_pkg::RV32MFast,
-  parameter cve2_pkg::rv32b_e RV32B           = cve2_pkg::RV32BNone
+  parameter cve2_pkg::rv32b_e RV32B           = cve2_pkg::RV32BNone,
+  parameter                   COREV_X_IF      = 0
 ) (
   input  logic                      clk_i,
   input  logic                      rst_ni,
@@ -78,6 +79,44 @@ module cve2_id_stage #(
   output logic [31:0]               multdiv_operand_a_ex_o,
   output logic [31:0]               multdiv_operand_b_ex_o,
 
+  // CORE-V-XIF
+  // Compressed Interface
+  output logic [3:0] x_compressed_id_o,
+   
+
+  // Issue Interface
+  output logic x_issue_valid_o,
+  input logic x_issue_ready_i,
+  output x_issue_req_t x_issue_req_o,
+  input x_issue_resp_t x_issue_resp_i,
+
+  // Commit Interface
+  output logic x_commit_valid_o,
+  output x_commit_t x_commit_o,
+
+  // Memory request/response Interface
+  input logic x_mem_valid_i,
+  output logic x_mem_ready_o,
+  input x_mem_req_t x_mem_req_i,
+  output x_mem_resp_t x_mem_resp_o,
+
+  // Memory Result Interface
+  output logic x_mem_result_valid_o,
+  output logic x_mem_result_err_o,
+
+  // Core internal xif memory signals
+  output logic        x_mem_instr_ex_o,
+  output logic [ 3:0] x_mem_id_ex_o,
+  input  logic        x_mem_instr_wb_i,
+  input  logic [31:0] result_fw_to_x_i,
+
+    // Result Interface
+  input logic x_result_valid_i,
+  output logic x_result_ready_o,
+  input x_result_t x_result_i,
+  output logic x_result_valid_assigned_o,
+
+
   // CSR
   output logic                      csr_access_o,
   output cve2_pkg::csr_op_e         csr_op_o,
@@ -121,6 +160,13 @@ module cve2_id_stage #(
   input  logic                      debug_ebreakm_i,
   input  logic                      debug_ebreaku_i,
   input  logic                      trigger_match_i,
+
+  // Core internal xif memory signals
+  output logic        x_mem_instr_ex_o,
+  output logic [ 3:0] x_mem_id_ex_o,
+  input  logic        x_mem_instr_wb_i,
+  input  logic [31:0] result_fw_to_x_i,
+  
 
   // Write back signal
   input  logic [31:0]               result_ex_i,
@@ -208,6 +254,9 @@ module cve2_id_stage #(
   assign rf_ren_a_o = rf_ren_a;
   assign rf_ren_b_o = rf_ren_b;
 
+  //localparam REGFILE_NUM_READ_PORTS = ((COREV_X_IF == 1) & (X_DUALREAD == 1)) ? 2 : 1;
+  //logic [REGFILE_NUM_READ_PORTS-1:0][31:0] regfile_data_ra_fwd;
+  //logic [REGFILE_NUM_READ_PORTS-1:0][31:0] regfile_data_rb_fwd;
   logic [31:0] rf_rdata_a_fwd;
   logic [31:0] rf_rdata_b_fwd;
 
@@ -222,6 +271,21 @@ module cve2_id_stage #(
 
   imm_a_sel_e  imm_a_mux_sel;
   imm_b_sel_e  imm_b_mux_sel, imm_b_mux_sel_dec;
+
+  // X-Interface
+  logic x_illegal_insn;
+  logic x_branch_or_async_taken;
+  logic x_control_illegal_reset;
+  logic [4:0] waddr_id;
+  logic [4:0] waddr_ex;
+  logic [4:0] waddr_wb;
+  logic [2:0] regs_used;
+  logic x_stall;
+  logic [2:0][4:0] x_rs_addr;
+  logic x_mem_data_req;
+  logic x_mem_valid;
+  logic [RF_READ_PORTS-1:0] x_ex_fwd;
+  logic [RF_READ_PORTS-1:0] x_wb_fwd;
 
   // Multiplier Control
   logic        mult_en_id, mult_en_dec; // use integer multiplier
@@ -407,6 +471,156 @@ module cve2_id_stage #(
     .branch_in_dec_o(branch_in_dec)
   );
 
+  generate
+    if (COREV_X_IF != 0) begin : gen_x_disp
+ 
+
+      cv32e40px_x_disp x_disp_i (
+          // clock and reset
+          .clk_i (clk),
+          .rst_ni(rst_n),
+
+          // compressed interface
+          .x_compressed_id_o(x_compressed_id_o),
+
+          // issue interface
+          .x_issue_valid_o         (x_issue_valid_o),
+          .x_issue_ready_i         (x_issue_ready_i),
+          .x_issue_resp_writeback_i(x_issue_resp_i.writeback),
+          .x_issue_resp_dualread_i (x_issue_resp_i.dualread),
+          .x_issue_resp_accept_i   (x_issue_resp_i.accept),
+          .x_issue_resp_loadstore_i(x_issue_resp_i.loadstore),
+          .x_issue_req_rs_valid_o  (x_issue_req_o.rs_valid),
+          .x_issue_req_id_o        (x_issue_req_o.id),
+          .x_issue_req_mode_o      (x_issue_req_o.mode),
+          .x_issue_req_ecs_valid   (x_issue_req_o.ecs_valid),
+
+          // commit interface
+          .x_commit_valid_o    (x_commit_valid_o),
+          .x_commit_id_o       (x_commit_o.id),
+          .x_commit_commit_kill(x_commit_o.commit_kill),
+
+          // memory (request/response) interface
+          .x_mem_valid_i       (x_mem_valid_i),
+          .x_mem_ready_o       (x_mem_ready_o),
+          .x_mem_req_mode_i    (x_mem_req_i.mode),
+          .x_mem_req_spec_i    (x_mem_req_i.spec),
+          .x_mem_req_last_i    (x_mem_req_i.last),
+          .x_mem_resp_exc_o    (x_mem_resp_o.exc),
+          .x_mem_resp_exccode_o(x_mem_resp_o.exccode),
+          .x_mem_resp_dbg_o    (x_mem_resp_o.dbg),
+
+          // memory result interface
+          .x_mem_result_valid_o(x_mem_result_valid_o),
+          .x_mem_result_err_o  (x_mem_result_err_o),
+
+          // result interface
+          .x_result_valid_i(x_result_valid_i),
+          .x_result_ready_o(x_result_ready_o),
+          .x_result_rd_i   (x_result_i.rd),
+          .x_result_we_i   (x_result_i.we),
+
+          // scoreboard, dependency check, stall, forwarding
+          .waddr_id_i          (waddr_id),
+          .waddr_ex_i          (waddr_ex),
+          .waddr_wb_i          (waddr_wb),
+          .we_ex_i             (regfile_alu_we_ex_o),
+          .we_wb_i             (regfile_we_wb_i),
+          .mem_instr_waddr_ex_i(regfile_waddr_ex_o[4:0]),
+          .mem_instr_we_ex_i   (regfile_we_ex_o),
+          .regs_used_i         (regs_used),
+          .branch_or_jump_i    (x_branch_or_async_taken),
+          .instr_valid_i       (instr_valid_i),
+          .x_rs_addr_i         (x_rs_addr),
+          .x_ex_fwd_o          (x_ex_fwd),
+          .x_wb_fwd_o          (x_wb_fwd),
+
+          // memory request core-internal status signals
+          .x_mem_data_req_o(x_mem_data_req),
+          .x_mem_instr_wb_i(x_mem_instr_wb_i),
+          .wb_ready_i      (wb_ready_i),
+
+          // additional status signals
+          .x_stall_o                (x_stall),
+          .x_illegal_insn_o         (x_illegal_insn),
+          .x_illegal_insn_dec_i     (illegal_insn_dec),
+          .x_control_illegal_reset_i(x_control_illegal_reset),
+          .id_ready_i               (id_ready_o),
+          .ex_valid_i               (ex_valid_i),
+          .ex_ready_i               (ex_ready_i),
+          .current_priv_lvl_i       (current_priv_lvl_i),
+          .data_req_dec_i           (data_req_id)
+      );
+
+
+      // illegal instruction signal
+      assign illegal_insn = x_illegal_insn;
+
+      // x-dispatcher signal assignments
+      assign x_issue_req_o.instr = instr;
+      assign x_issue_req_o.ecs = '0;
+      assign x_rs_addr[0] = regfile_addr_ra_id[4:0];
+      assign x_rs_addr[1] = regfile_addr_rb_id[4:0];
+      assign waddr_id = instr[REG_D_MSB:REG_D_LSB];
+      assign waddr_ex = regfile_alu_waddr_ex_o[4:0];
+      assign waddr_wb = regfile_waddr_wb_i[4:0];
+      assign regs_used = {regc_used, regb_used, rega_used};
+      assign x_result_valid_assigned_o = x_result_valid_i;
+      assign x_mem_valid = x_mem_valid_i;
+
+      // xif integer souce operand selection
+      for (genvar j = 0; j < REGFILE_NUM_READ_PORTS; j++) begin : xif_operand_assignment_dualread
+        for (genvar i = 0; i < 3; i++) begin : xif_operand_assignment
+          always_comb begin
+            if (i == 0) begin
+              x_issue_req_o.rs[i+3*j] = regfile_data_ra_id[j];
+            end else if (i == 1) begin
+              x_issue_req_o.rs[i+3*j] = regfile_data_rb_id[j];
+            end
+            if (x_ex_fwd[i+3*j]) begin
+              x_issue_req_o.rs[i+3*j] = result_fw_to_x_i;
+            end else if (x_wb_fwd[i+3*j]) begin
+              x_issue_req_o.rs[i+3*j] = regfile_wdata_wb_i;
+            end
+          end
+        end
+      end
+
+      // LSU signal assignment/MUX
+      always_comb begin
+        x_mem_data_type_id = 2'b00;
+        case (x_mem_req_i.size)
+          3'd0: x_mem_data_type_id = 2'b10;  // SB
+          3'd1: x_mem_data_type_id = 2'b01;  // SH
+          3'd2: x_mem_data_type_id = 2'b00;  // SW
+          default: x_mem_data_type_id = 2'b00;  // SW
+        endcase
+      end
+
+    end else begin : gen_no_x_disp
+
+      // default illegal instruction assignment
+      assign illegal_insn              = illegal_insn_dec;
+
+      // default assignment for x-interface control signals
+      assign x_stall                   = 1'b0;
+      assign x_result_valid_assigned_o = 1'b0;
+      assign x_mem_valid               = 1'b0;
+      assign x_mem_data_req            = '0;
+      assign x_mem_data_type_id        = '0;
+      assign x_issue_valid_o           = 1'b0;
+      assign x_compressed_id_o         = '0;
+      assign x_issue_req_o             = '0;
+      assign x_commit_valid_o          = '0;
+      assign x_commit_o                = '0;
+      assign x_mem_ready_o             = '0;
+      assign x_mem_resp_o              = '0;
+      assign x_mem_result_valid_o      = '0;
+      assign x_mem_result_err_o        = '0;
+      assign x_result_ready_o          = '0;
+
+    end : gen_no_x_disp
+  endgenerate
   /////////////////////////////////
   // CSR-related pipeline flushes //
   /////////////////////////////////
